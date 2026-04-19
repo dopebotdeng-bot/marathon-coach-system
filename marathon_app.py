@@ -281,25 +281,42 @@ def main():
         hide_index=True
     )
     
-    # 圖片下載 (顯示文字)
+    # 桌布下載
     st.markdown("---")
-    st.header("📱 手機桌布")
-    st.info("💡 按下載把手機桌布存起來，每天打開就能看到課表！")
+    st.header("📱 手機桌布下載")
     
-    if st.button("📥 生成桌布下載"):
-        # 簡單文字版
-        text = f"""🏃 Kevin的馬拉松訓練
-目標: {tm} (全馬) / {th} (半馬)
-比賽: {rd}
-訓練期: {phase}
+    # 生成文字內容
+    wall_text = f"""🏃 Kevin的馬拉松訓練
+📅 目標: {rd}
+🎯 目標: 全馬 {tm} / 半馬 {th}
+📆 訓練期: {phase}
 
-📅 週訓練:
+═══════════════════════
+📅  本週訓練課表
+═══════════════════════
 """
-        for row in pdata["schedule"]:
-            text += f"{row['day']}: {row['title']} ({row['pace']}) - {row['note']}\n"
-        
-        st.text_area("複製以下文字到手機备忘录:", text, height=300)
-        st.download_button("📥 下載文字版", text, "marathon_schedule.txt", "text/plain")
+    for row in pdata["schedule"]:
+        wall_text += f"""
+{row['day']} {row['title']}
+⏱️ 配速: {row['pace']}
+📝 {row['note']}
+"""
+    
+    wall_text += f"""
+═══════════════════════
+🏃 加油！訓練愉快！
+═══════════════════════
+"""
+    
+    # 直接顯示下載按鈕
+    st.download_button(
+        label="📥 下載課表到電腦/手機",
+        data=wall_text,
+        file_name=f"marathon_schedule_{rd}.txt",
+        mime_type="text/plain"
+    )
+    
+    st.info("💡 下載後可存到手機備忘錄，设為手機桌布！")
 
     st.markdown("---")
     st.caption("🏃 馬拉松教訓系統 | 訓練愉快！")
