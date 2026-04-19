@@ -1,0 +1,103 @@
+{
+  "payment_rules": {
+    "description": "多平台支付優惠規則",
+    "platforms": {
+      "pchome": {
+        "name": "PChome",
+        "payment_methods": {
+          "credit_card": {
+            "name": "信用卡",
+            "discount_rate": 0.05,
+            "max_discount": 500,
+            "note": "指定銀行5%回饋"
+          },
+          "line_pay": {
+            "name": "LINE Pay",
+            "discount_rate": 0.03,
+            "max_discount": 100,
+            "note": "週二筆筆回饋3%"
+          },
+          "jk_pay": {
+            "name": "街口支付",
+            "discount_rate": 0.02,
+            "max_discount": 50,
+            "note": "需開啟街口帳戶"
+          },
+          "cod": {
+            "name": "貨到付款",
+            "fee": 30,
+            "note": "+30元手續費"
+          }
+        },
+        "shipping": {
+          "family": {"fee": 59, "threshold": 0},
+          "seven11": {"fee": 59, "threshold": 0},
+          "store": {"fee": 0, "threshold": 350}
+        }
+      },
+      "momo": {
+        "name": "Momo",
+        "payment_methods": {
+          "credit_card": {
+            "name": "信用卡",
+            "discount_rate": 0.04,
+            "max_discount": 999999,
+            "note": "4%回饋無上限"
+          },
+          "line_pay": {
+            "name": "LINE Pay",
+            "discount_rate": 0.02,
+            "max_discount": 100,
+            "note": "2%回饋"
+          },
+          "jk_pay": {
+            "name": "街口支付",
+            "discount_rate": 0.015,
+            "max_discount": 50
+          },
+          "cod": {
+            "name": "貨到付款",
+            "fee": 30
+          }
+        },
+        "shipping": {
+          "family": {"fee": 60, "threshold": 0},
+          "seven11": {"fee": 60, "threshold": 0},
+          "store": {"fee": 0, "threshold": 399}
+        }
+      },
+      "shopee": {
+        "name": "Shopee 蝦皮",
+        "payment_methods": {
+          "credit_card": {
+            "name": "信用卡",
+            "discount_rate": 0,
+            "note": "無額外折扣"
+          },
+          "line_pay": {
+            "name": "LINE Pay",
+            "discount_rate": 0,
+            "note": "無額外折扣"
+          },
+          "shopee_pay": {
+            "name": "蝦皮支付",
+            "discount_rate": 0.08,
+            "max_discount": 2000,
+            "note": "92折券上限2000元"
+          },
+          "cod": {
+            "name": "貨到付款",
+            "fee": 0,
+            "note": "免手續費"
+          }
+        },
+        "shipping": {
+          "family": {"fee": 0, "threshold": 199},
+          "seven11": {"fee": 0, "threshold": 199},
+          "store": {"fee": 0, "threshold": 0}
+        }
+      }
+    }
+  },
+  "updated_at": "2026-04-15"
+}
