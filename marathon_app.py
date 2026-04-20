@@ -286,8 +286,9 @@ def main():
     st.header("📱 手機桌布下載")
     
     # 生成文字內容
-    wall_text = f"""🏃 Kevin的馬拉松訓練
-📅 目標: {rd}
+    race_date_str = rd.strftime("%Y-%m-%d")
+        wall_text = f"""🏃 Kevin的馬拉松訓練
+📅 目標: {race_date_str}
 🎯 目標: 全馬 {tm} / 半馬 {th}
 📆 訓練期: {phase}
 
