@@ -287,7 +287,7 @@ def main():
     
     # 生成文字內容
     race_date_str = rd.strftime("%Y-%m-%d")
-        wall_text = f"""🏃 Kevin的馬拉松訓練
+    wall_text = f"""🏃 Kevin的馬拉松訓練
 📅 目標: {race_date_str}
 🎯 目標: 全馬 {tm} / 半馬 {th}
 📆 訓練期: {phase}
@@ -313,7 +313,7 @@ def main():
     st.download_button(
         label="📥 下載課表到電腦/手機",
         data=wall_text,
-        file_name=f"marathon_schedule_{rd}.txt",
+        file_name=f"marathon_schedule_{race_date_str}.txt",
         mime_type="text/plain"
     )
     
