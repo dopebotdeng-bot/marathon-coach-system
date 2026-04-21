@@ -1,16 +1,91 @@
 #!/usr/bin/env python3
 """
-🏃 馬拉松教練系統 - 完整版
+🏃 馬拉松教練系統 - 完整版 (VDOT 科學訓練)
+參考: garmin-ai-coach + Coach H
 """
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+
+st.set_page_config(page_title="🏃 馬拉松教練", page_icon="🏃", layout="wide")
 
 # ========================
-# 頁面設定
+# VDOT 配速表 (Daniels' Running Formula)
 # ========================
-st.set_page_config(page_title="🏃 馬拉松教練", page_icon="🏃", layout="wide")
+VDOT_PACE = {
+    # VDOT 30-35 (全馬 4:00-4:30)
+    30: {"E": "7:12-8:02", "M": "6:23", "T": "5:56", "I": "5:29", "R": "4:51"},
+    31: {"E": "7:02-7:50", "M": "6:13", "T": "5:47", "I": "5:21", "R": "4:44"},
+    32: {"E": "6:53-7:39", "M": "6:04", "T": "5:38", "I": "5:13", "R": "4:37"},
+    33: {"E": "6:44-7:29", "M": "5:55", "T": "5:30", "I": "5:06", "R": "4:31"},
+    34: {"E": "6:35-7:19", "M": "5:47", "T": "5:22", "I": "4:59", "R": "4:25"},
+    35: {"E": "6:27-7:10", "M": "5:39", "T": "5:14", "I": "4:52", "R": "4:19"},
+    # VDOT 36-40 (全馬 3:30-4:00)
+    36: {"E": "6:20-7:01", "M": "5:31", "T": "5:07", "I": "4:46", "R": "4:14"},
+    37: {"E": "6:12-6:53", "M": "5:24", "T": "5:00", "I": "4:40", "R": "4:08"},
+    38: {"E": "6:05-6:45", "M": "5:16", "T": "4:53", "I": "4:34", "R": "4:03"},
+    39: {"E": "5:58-6:38", "M": "5:09", "T": "4:46", "I": "4:29", "R": "3:58"},
+    40: {"E": "5:51-6:30", "M": "5:02", "T": "4:40", "I": "4:24", "R": "3:53"},
+}
+
+# 配速區間說明
+PACE_ZONES = {
+    "E": {"name": "Easy / Marathon (輕鬆/馬拉松配速)", "心率": "60-70%"},
+    "M": {"name": "Marathon (馬拉松配速)", "心率": "70-80%"},
+    "T": {"name": "Threshold (門檻配速)", "心率": "80-88%"},
+    "I": {"name": "Interval (間歇)", "心率": "88-92%"},
+    "R": {"name": "Repetition (重複跑)", "心率": "92-100%"},
+}
+
+# ========================
+# 鞋款資料庫
+# ========================
+SHOES = {
+    "輕鬆跑/Easy Run": [
+        "On CloudMonster 2", "On Cloud", "Hoka Clifton 10", "Hoka Clifton 9",
+        "ASICS Gel-Nimbus 26", "ASICS Gel-Cumulus 26", "ASICS Gel-Kayano 31",
+        "Nike Air Zoom Pegasus 41", "Nike React Miler 4",
+        "adidas Ultraboost 23", "adidas Ultraboost Light",
+        "Brooks Ghost 16", "Brooks Glycerin 21",
+        "New Balance 1080 v14", "New Balance 880v14",
+        "Saucony Ride 17", "Saucony Triumph 22",
+        "特步兩千公里3代", "Bmai 驚嘆3.0"
+    ],
+    "節奏跑/Tempo": [
+        "On CloudBoom", "Hoka Mach 5", "adidas Boston 13",
+        "adidas Takumi Sen 10", "adidas evo sl",
+        "ASICS MetaSpeed Edge", "Nike Air Zoom Streak 10",
+        "Saucony Endorphin Speed 4", "Saucony Fastwitch",
+        "New Balance FuelCell Rebel v4", "Puma Deviate Nitro 3",
+        "Superblast4", "Novablast4"
+    ],
+    "間歇跑/Interval": [
+        "On CloudBoom", "Nike ZoomX Vaporfly 3", "Nike ZoomX Streakfly",
+        "adidas Takumi Sen 10", "adidas Adizero Pro 4",
+        "ASICS MetaSpeed", "Saucony Endorphin Pro 4",
+        "New Balance 160X v3", "Puma Nitro",
+        "Hoka Rocket X3", "Brooks Hyperion Max",
+        "Superblast4", "Novablast4"
+    ],
+    "長距離/Long Run": [
+        "Hoka Bondi 8", "Hoka Clifton Edge", "Nike React Infinity Run 3",
+        "Nike Vaporfly 3", "adidas Ultraboost Light",
+        "ASICS Gel-Nimbus 26", "Brooks Glycerin Max",
+        "New Balance 1070v14", "Saucony Triumph 22"
+    ],
+    "恢復跑/Recovery": [
+        "Hoka Ora Recovery", "Hoka Arahi 7", "ASICS Gel-Kayano 31",
+        "Brooks Ghost 16", "Nike Invincible Run 3",
+        "Saucony Cohesion", "New Balance 990v6"
+    ],
+    "比賽/競速": [
+        "Nike Vaporfly 4/3%", "Nike Alphafly 3",
+        "adidas Adizero Pro 4", "Hoka Rocket X3",
+        "Saucony Endorphin Pro 4", "New Balance 160X",
+        "Puma Nitro Elite", "Superblast4"
+    ]
+}
 
 # ========================
 # 跑步地點
@@ -19,308 +94,342 @@ LOCATIONS = {
     "公路/街道": {"icon": "🛣️", "特點": "最接近比賽情境", "建議": "公路跑鞋", "難度": "中等"},
     "跑步機": {"icon": "🏃", "特點": "可控制環境", "建議": "緩震跑鞋", "難度": "簡單"},
     "操場 PU 跑道": {"icon": "🔴", "特點": "軟硬度適中", "建議": "跑道專用", "難度": "簡單"},
-    "公園綠地": {"icon": "🌳", "特點": "變化地形", "建議": "輕量訓練鞋", "難度": "中等"},
     "河堤步道": {"icon": "🌊", "特點": "風景好路面平", "建議": "公路跑鞋", "難度": "中等"},
     "山坡丘陵": {"icon": "⛰️", "特點": "坡度訓練", "建議": "越野跑鞋", "難度": "難"},
-    "登山步道": {"icon": "🥾", "特點": "自然地形", "建議": "登山鞋", "難度": "難"},
-    "田徑場紅土": {"icon": "🍂", "特點": "軟紅土", "建議": "練習鞋", "難度": "簡單"},
 }
 
 # ========================
-# 鞋款資料庫（完整的）
+# 科學化訓練課表 (24週)
 # ========================
-SHOES = {
-    "輕鬆跑/Easy Run": [
-        # On Cloud
-        "On CloudMonster 2", "On Cloud", "On Cloud nova",
-        # Hoka
-        "Hoka Clifton 10", "Hoka Clifton 9", "Hoka Arahi 7", "Hoka Clifton Edge",
-        # ASICS
-        "ASICS Gel-Nimbus 26", "ASICS Gel-Cumulus 26", "ASICS Gel-Kayano 31", 
-        "ASICS Dynafit", "ASICS Gel-Quantum",
-        # Nike
-        "Nike Air Zoom Pegasus 41", "Nike Air Zoom Pegasus 41 Turbo", "Nike React Miler 4",
-        # adidas
-        "adidas Ultraboost 23", "adidas Solarthun", "adidas Ultraboost Light",
-        # Brooks
-        "Brooks Ghost 16", "Brooks Glycerin 21", "Brooks Glycerin Max", "Brooks Ghost Max",
-        # New Balance
-        "New Balance 1080 v14", "New Balance 880v14", "New Balance 990v6",
-        # Saucony
-        "Saucony Ride 17", "Saucony Triumph 22", "Saucony Endorphin Shift 4",
-        # Puma
-        "Puma Forever Run", "Puma Magnify Nitro 2",
-        # 其他
-        "特步兩千公里3代", "Bmai 驚嘆3.0"
-    ],
-    "節奏跑/Tempo": [
-        "On CloudBoom", "On Cloud surf",
-        "Hoka Mach 5", "Hoka Mach 4",
-        "adidas Boston 13", "adidas Takumi Sen 10", "adidas evo sl",
-        "ASICS MetaSpeed Edge", "ASICS GlideMax",
-        "Nike Air Zoom Streak 10", "Nike Streak 9",
-        "Saucony Endorphin Speed 4", "Saucony Fastwitch",
-        "New Balance FuelCell Rebel v4", "New Balance 880 v13",
-        "Puma Deviate Nitro 3", "Puma Fast-Trac",
-        "Superblast4", "Novablast4"
-    ],
-    "間歇跑/Interval": [
-        "On CloudBoom", "On Cloud X",
-        "Nike ZoomX Vaporfly 3", "Nike ZoomX Streakfly", "Nike Alphafly 3",
-        "adidas Takumi Sen 10", "adidas Adizero Pro 4", "adidas ADIZERO SL",
-        "ASICS MetaSpeed", "ASICS GlideMax",
-        "Saucony Endorphin Pro 4", "Saucony Endorphin Elite",
-        "New Balance FuelCell Dragonfly", "New Balance 160X v3", "NB 160X",
-        "Puma Nitro", "Puma Nitro Elite",
-        "Hoka Rocket X3", "Brooks Hyperion Max",
-        "Superblast4", "Novablast4"
-    ],
-    "長距離/Long Run": [
-        "Hoka Bondi 8", "Hoka Bondi 7", "Hoka Clifton Edge",
-        "Nike React Infinity Run 3", "Nike Vaporfly 3", "Nike Air Zoom Vomero",
-        "adidas Ultraboost Light", "adidas Adizero Pro 4",
-        "ASICS Gel-Nimbus 26", "ASICS Gel-Kayano 31", "ASICS Gel-Quantum",
-        "Brooks Glycerin Max", "Brooks Glycerin 21",
-        "New Balance 1070v14", "New Balance 1080 v14",
-        "Saucony Triumph 22", "Saucony Endorphin Shift 4",
-        "Puma Magnify Nitro 2"
-    ],
-    "恢復跑/Recovery": [
-        "Hoka Ora Recovery", "Hoka Clifton L", "Hoka Arahi 7",
-        "ASICS Gel-Kayano 31", "ASICS Load", "ASICS Dyad",
-        "Brooks Adrenaline GTS", "Brooks Ghost 16",
-        "Nike Invincible Run 3", "Nike React Miler 4",
-        "Saucony Cohesion", "Saucony Ride 17",
-        "New Balance 990v6", "New Balance 880v14",
-        "特步兩千公里3代", "Puma Tazon"
-    ],
-    "跑道/田徑": [
-        "Nike Streak 9", "Nike Streak LC", "Nike Streak LT",
-        "adidas Takumi San", "adidas Takumi Sen 10", "adidas ADIZERO SL",
-        "New Balance FuelCell Supercomp", "NB 1000",
-        "Miz波鞋", "Puma evoSpeed", "Puma Fast-Trac",
-        "Saucony type A9", "Brooks pureGrit",
-        "ASICS Tarther", "ASICS DS Trainer"
-    ],
-    "比賽/競速": [
-        "Nike Vaporfly 4/3%", "Nike Alphafly 3", "Nike Alphafly 2",
-        "adidas Adizero Pro 4", "adidas Takumi Sen 10", "adidas Takumi Sen 8",
-        "Hoka Rocket X3", "Hoka Dragonfly", "Hoka Cielo X",
-        "Saucony Endorphin Pro 4", "Saucony Endorphin Elite", "Saucony Fastwitch",
-        "New Balance 160X v3", "NB 160X", "NB FuelCell Supercomp",
-        "Puma Nitro Elite", "Puma Deviate Nitro 3",
-        "Brooks Hyperion Max", "Brooks Hyperion Tempo",
-        "Superblast4", "Novablast4", "On CloudBoom"
-    ]
-}
-
-# ========================
-# 練習地點
-# ========================
-LOCATIONS = {
-    "公路/街道": {"icon": "🛣️", "特點": "最接近比賽情境", "建議": "公路跑鞋", "難度": "中等"},
-    "跑步機": {"icon": "🏃", "特點": "可控制環境", "建議": "緩震跑鞋", "難度": "簡單"},
-    "操場 PU 跑道": {"icon": "🔴", "特點": "軟硬度適中", "建議": "跑道專用", "難度": "簡單"},
-    "公園綠地": {"icon": "🌳", "特點": "變化地形", "建議": "輕量訓練鞋", "難度": "中等"},
-    "河堤步道": {"icon": "🌊", "特點": "風景好路面平", "建議": "公路跑鞋", "難度": "中等"},
-    "山坡丘陵": {"icon": "⛰️", "特點": "坡度訓練", "建議": "越野跑鞋", "難度": "難"},
-    "登山步道": {"icon": "🥾", "特點": "自然地形", "建議": "登山鞋", "難度": "難"},
-    "田徑場紅土": {"icon": "🍂", "特點": "軟紅土", "建議": "練習鞋", "難度": "簡單"},
-}
-
-# ========================
-# 練習課表
-# ========================
-TRAINING_PHASES = {
-    "基礎期 (4週)": {"focus": "有氧基礎", "km": "30-40", "schedule": [
-        {"day": "週一", "type": "rest", "title": "休息 - 讓身體恢復", "note": "🛏️ 充分休息，補足睡眠", "pace": "-"},
-        {"day": "週二", "type": "easy", "title": "輕鬆跑 5-6km @ 6:30-7:00/km", "note": "🚶 輕鬆跑，維持心跳<140", "pace": "6:30-7:00"},
-        {"day": "週三", "type": "easy", "title": "輕鬆跑 5-6km @ 6:30-7:00/km", "note": "🚶 同上，保持微笑跑", "pace": "6:30-7:00"},
-        {"day": "週四", "type": "rest", "title": "休息或核心訓練", "note": "🧘 核心/伸展/按摩滾筒", "pace": "-"},
-        {"day": "週五", "type": "easy", "title": "輕鬆跑 5-6km @ 6:30-7:00/km", "note": "🚶 輕鬆跑，不要衝", "pace": "6:30-7:00"},
-        {"day": "週六", "type": "long", "title": "長距離 10-12km @ 6:30-7:00/km", "note": "🏔️ 享受長跑，補水!", "pace": "6:30-7:00"},
-        {"day": "週日", "type": "easy", "title": "恢復跑 4-5km @ 7:00/km", "note": "🚶 慢慢跑，恢復為主", "pace": "7:00"}
-    ]},
-    "建設期 (8週)": {"focus": "里程+間歇", "km": "45-65", "schedule": [
-        {"day": "週一", "type": "rest", "title": "休息", "note": "🛏️ 充分休息", "pace": "-"},
-        {"day": "週二", "type": "interval", "title": "間歇 6x800m @ 4:30-5:00/km", "note": "⚡ 全力衝刺，恢復慢跑", "pace": "4:30-5:00"},
-        {"day": "週三", "type": "easy", "title": "輕鬆跑 8-10km @ 6:00-6:30/km", "note": "🚶 恢復跑，補充水分", "pace": "6:00-6:30"},
-        {"day": "週四", "type": "tempo", "title": "節奏跑 10-12km @ 5:45-6:00/km", "note": "🏃 配速跑，找到節奏", "pace": "5:45-6:00"},
-        {"day": "週五", "type": "rest", "title": "休息或核心", "note": "🧘 按摩、伸展、营养", "pace": "-"},
-        {"day": "週六", "type": "long", "title": "長距離 18-25km @ 6:00-6:30/km", "note": "🏔️  LSD，補充足量", "pace": "6:00-6:30"},
-        {"day": "週日", "type": "easy", "title": "恢復跑 6-8km @ 6:30-7:00/km", "note": "🚶 慢慢跑，伸展", "pace": "6:30-7:00"}
-    ]},
-    "巔峰期 (8週)": {"focus": "強度", "km": "60-85", "schedule": [
-        {"day": "週一", "type": "rest", "title": "休息", "note": "🛏️ 完全休息", "pace": "-"},
-        {"day": "週二", "type": "interval", "title": "間歇 8x1000m @ 4:20-4:40/km", "note": "⚡ 強度課表，全力!", "pace": "4:20-4:40"},
-        {"day": "週三", "type": "easy", "title": "輕鬆跑 10-12km @ 5:45-6:15/km", "note": "🚶 恢復為主", "pace": "5:45-6:15"},
-        {"day": "週四", "type": "tempo", "title": "節奏跑 12-18km @ 5:30-5:45/km", "note": "🏃 配速跑，維持節奏", "pace": "5:30-5:45"},
-        {"day": "週五", "type": "rest", "title": "休息", "note": "🧘 休息+營養", "pace": "-"},
-        {"day": "週六", "type": "long", "title": "長距離 22-32km @ 5:45-6:15/km", "note": "🏔️  LSD，碳水補充", "pace": "5:45-6:15"},
-        {"day": "週日", "type": "easy", "title": "恢復跑 8-10km @ 6:30-7:00/km", "note": "🚶 放鬆跑", "pace": "6:30-7:00"}
-    ]},
-    "減量期 (4週)": {"focus": "恢復", "km": "35-50", "schedule": [
-        {"day": "週一", "type": "rest", "title": "休息", "note": "🛏️ 完全休息", "pace": "-"},
-        {"day": "週二", "type": "interval", "title": "短間歇 4x400m @ 4:00/km", "note": "⚡ 短衝刺，保持強度", "pace": "4:00"},
-        {"day": "週三", "type": "easy", "title": "輕鬆跑 6-8km @ 6:00-6:30/km", "note": "🚶 輕鬆跑", "pace": "6:00-6:30"},
-        {"day": "週四", "type": "tempo", "title": "短節奏 8-10km @ 5:30/km", "note": "🏃 確認狀態", "pace": "5:30"},
-        {"day": "週五", "type": "rest", "title": "休息", "note": "🧘 休息、減法", "pace": "-"},
-        {"day": "週六", "type": "race", "title": "🏆 比賽日！", "note": "🎉 全力出擊!", "pace": "目標配速"},
-        {"day": "週日", "type": "easy", "title": "恢復跑 5km @ 7:00/km", "note": "🚶 慢慢跑，慶功", "pace": "7:00"}
-    ]}
-}
-
-def parse_time(t):
-    try:
-        p = t.split(":")
-        return int(p[0])*60 + int(p[1])
-    except:
-        return 0
+def generate_training_plan(vdot, weeks=24):
+    """根據 VDOT 生成訓練課表"""
+    
+    # 根據 VDOT 估算目標馬拉松時間
+    if vdot >= 40:
+        marathon_time = "3:30-3:45"
+    elif vdot >= 36:
+        marathon_time = "3:45-4:00"
+    elif vdot >= 33:
+        marathon_time = "4:00-4:15"
+    elif vdot >= 30:
+        marathon_time = "4:15-4:30"
+    else:
+        marathon_time = "4:30-5:00"
+    
+    pace = VDOT_PACE.get(vdot, VDOT_PACE[33])
+    
+    # 24週訓練計劃
+    plan = []
+    
+    # 基礎期 (1-4週)
+    for week in range(1, 5):
+        plan.append({
+            "週": f"W{week}",
+            "階段": "🏗️ 基礎期",
+            "主題": "有氧基礎 + 姿勢",
+            "里程": f"{30 + week*2}km",
+            "重點": "E配速為主，建立習慣",
+            "課表": [
+                {"day": "週二", "type": "E", "title": f"Easy {5+week}km", "pace": pace["E"]},
+                {"day": "週四", "type": "E", "title": f"Easy {5+week}km", "pace": pace["E"]},
+                {"day": "週六", "type": "E", "title": f"長距離 {8+week*2}km", "pace": pace["E"]},
+                {"day": "週日", "type": "R", "title": f"恢復跑 {3+week}km", "pace": "輕鬆"},
+            ]
+        })
+    
+    # 建設期 (5-12週)
+    for week in range(5, 13):
+        w = week - 4
+        plan.append({
+            "週": f"W{week}",
+            "階段": "🔨 建設期",
+            "主題": "里程 + 間歇 + 節奏",
+            "里程": f"{40 + w*3}km",
+            "重點": "加入T跑和間歇",
+            "課表": [
+                {"day": "週二", "type": "I", "title": f"間歇 {6+w}x800m", "pace": pace["I"]},
+                {"day": "週三", "type": "E", "title": f"Easy {8+w}km", "pace": pace["E"]},
+                {"day": "週四", "type": "T", "title": f"節奏跑 {8+w}km", "pace": pace["T"]},
+                {"day": "週六", "type": "E", "title": f"長距離 {15+w*2}km", "pace": pace["E"]},
+                {"day": "週日", "type": "R", "title": f"恢復跑 {5+w}km", "pace": "輕鬆"},
+            ]
+        })
+    
+    # 巔峰期 (13-20週)
+    for week in range(13, 21):
+        w = week - 12
+        plan.append({
+            "週": f"W{week}",
+            "階段": "⚡ 巔峰期",
+            "主題": "強度訓練 + 長跑",
+            "里程": f"{55 + w*4}km",
+            "重點": "馬拉松配速長跑",
+            "課表": [
+                {"day": "週二", "type": "I", "title": f"間歇 {8+w}x1000m", "pace": pace["I"]},
+                {"day": "週三", "type": "E", "title": f"Easy {10+w}km", "pace": pace["E"]},
+                {"day": "週四", "type": "T", "title": f"節奏跑 {12+w}km", "pace": pace["T"]},
+                {"day": "週六", "type": "M", "title": f"MP長跑 {18+w*2}km", "pace": pace["M"]},
+                {"day": "週日", "type": "R", "title": f"恢復跑 {6+w}km", "pace": "輕鬆"},
+            ]
+        })
+    
+    # 減量期 (21-24週)
+    for week in range(21, 25):
+        w = week - 20
+        plan.append({
+            "週": f"W{week}",
+            "階段": "📉 減量期",
+            "主題": "恢復 + 衝刺",
+            "里程": f"{45 - w*5}km",
+            "重點": "減少里程，保持強度",
+            "課表": [
+                {"day": "週二", "type": "I", "title": f"短間歇 {4}x400m", "pace": pace["R"]},
+                {"day": "週三", "type": "E", "title": f"Easy {6-w}km", "pace": pace["E"]},
+                {"day": "週四", "type": "T", "title": f"確認配速 {8-w}km", "pace": pace["T"]},
+                {"day": "週六", "type": "RACE", "title": "🏆 比賽日！", "pace": "目標配速"},
+                {"day": "週日", "type": "R", "title": "恢復跑 5km", "pace": "輕鬆"},
+            ]
+        })
+    
+    return plan, marathon_time, pace
 
 # ========================
 # 主程式
 # ========================
 def main():
     st.title("🏃 馬拉松教練系統")
-    st.markdown("### 建立你的專屬訓練計畫！")
+    st.markdown("### 基於 VDOT 科學化訓練 | 參考 Daniels' Running Formula")
     st.markdown("---")
     
     with st.sidebar:
         st.header("👤 運動員資料")
+        
         name = st.text_input("名字", "Kevin")
         
-        st.markdown("### 📊 目前的成績")
-        c1, c2 = st.columns(2)
-        with c1: ch = st.text_input("半馬", "1:56")
-        with c2: th = st.text_input("目標半馬", "1:50")
-        c3, c4 = st.columns(2)
-        with c3: cm = st.text_input("全馬", "4:28")
-        with c4: tm = st.text_input("目標全馬", "4:00")
-        rd = st.date_input("目標比賽", value=datetime(2026,12,19))
+        # 體能數據
+        st.markdown("### 📊 體能數據 (Garmin)")
         
-        # 選擇鞋款
+        col1, col2 = st.columns(2)
+        with col1:
+            vdot = st.number_input("VDOT", min_value=20, max_value=70, value=33)
+        with col2:
+            vo2max = st.number_input("VO2max", min_value=20, max_value=80, value=45)
+        
+        rhr = st.number_input("靜止心率 RHR (bpm)", value=52)
+        hrv = st.number_input("HRV (ms)", value=45)
+        
+        # 恢復狀態
+        st.markdown("### 😴 今日恢復狀態")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            body_battery = st.slider("Body Battery", 0, 100, 70)
+        with col2:
+            sleep_score = st.slider("睡眠分數", 0, 100, 75)
+        
+        # 恢復燈號
+        if body_battery >= 80 and sleep_score >= 75 and hrv >= 40:
+            recovery_status = "🟢 恢復良好，可以訓練"
+        elif body_battery >= 60 or sleep_score >= 65:
+            recovery_status = "🟡 適中，適量訓練"
+        else:
+            recovery_status = "🔴 恢復不足，建議休息"
+        
+        st.info(recovery_status)
+        
+        # 目標
+        st.markdown("### 🎯 比賽目標")
+        col1, col2 = st.columns(2)
+        with col1:
+            target_marathon = st.text_input("目標全馬", "4:00")
+        with col2:
+            target_half = st.text_input("目標半馬", "1:50")
+        
+        race_date = st.date_input("目標比賽", value=datetime(2026, 12, 19))
+        
+        # 鞋款
         st.markdown("---")
-        st.header("👟 選擇你現有的鞋款")
-        
+        st.header("👟 你的鞋款")
         my_shoes = []
         for cat, shoes in SHOES.items():
-            selected = st.multiselect(
-                f"🏃 {cat}", 
-                options=shoes,
-                default=[],
-                key=f"cat_{cat}"
-            )
+            selected = st.multiselect(f"🏃 {cat}", shoes, default=[], key=f"cat_{cat}")
             my_shoes.extend(selected)
         
-        custom = st.text_input("➕ 其他鞋款（用逗號分開）", "")
-        if custom:
-            my_shoes.extend([s.strip() for s in custom.split(",") if s.strip()])
-        
+        # 地點
         st.markdown("---")
         st.header("🏃 跑步地點")
-        locs = st.multiselect("選��", list(LOCATIONS.keys()), default=["公路/街道"])
+        locs = st.multiselect("選擇", list(LOCATIONS.keys()), default=["公路/街道"])
+    
+    # ========================
+    # 主內容
+    # ========================
+    
+    # 計算
+    days_to_race = (race_date - datetime.now().date()).days
+    weeks_to_race = days_to_race // 7
+    
+    # 產生訓練計劃
+    plan, marathon_time, pace = generate_training_plan(vdot, weeks_to_race)
     
     # 顯示分析
-    st.subheader("📊 能力分析")
-    cs, ts = parse_time(ch), parse_time(th)
-    cm2, tm2 = parse_time(cm), parse_time(tm)
-    days = (rd - datetime.now().date()).days
+    st.header("📊 體能分析")
     
-    c1, c2, c3 = st.columns(3)
-    c1.metric("半馬差距", f"-{cs-ts}分", f"目標: {th}")
-    c2.metric("全馬差距", f"-{cm2-tm2}分", f"目標: {tm}")
-    c3.metric("備戰天", f"{days}天", "加油!")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("VDOT", vdot, f"馬拉松預估: {marathon_time}")
+    col2.metric("VO2max", vo2max)
+    col3.metric("RHR", f"{rhr} bpm")
+    col4.metric("備戰", f"{days_to_race}天 / {weeks_to_race}週")
     
-    # === 顯示表格課表 ===
-    st.markdown("---")
-    st.header("🗓️ 本週訓練課表")
+    # 配速區間
+    st.header("⏱️ 你的 VDOT 配速區間")
     
-    phase = st.selectbox("選擇訓練週期", list(TRAINING_PHASES.keys()), index=1)
-    pdata = TRAINING_PHASES[phase]
+    pace_df = pd.DataFrame(VDOT_PACE.get(vdot, VDOT_PACE[33]).items(), 
+                          columns=["區間", "配速"])
+    st.dataframe(pace_df, hide_index=True, use_container_width=True)
     
-    st.markdown(f"**目標**: {pdata['focus']} | **週跑量**: {pdata['km']}km")
+    with st.expander("📖 配速區間說明"):
+        for zone, info in PACE_ZONES.items():
+            st.markdown(f"**{zone}**: {info['name']} (心率 {info['心率']})")
     
-    # 轉成 DataFrame 顯示表格
-    df = pd.DataFrame(pdata["schedule"])
+    # 恢復狀態
+    st.header("😴 今日恢復狀態")
     
-    # 新增鞋款欄位
-    shoe_recs = []
-    for row in pdata["schedule"]:
-        if row['type'] == 'rest':
-            shoe_recs.append("-")
-        else:
-            # 根據訓練類型推薦鞋款
-            type_map = {
-                "easy": "輕鬆跑/Easy Run",
-                "interval": "間歇跑/Interval", 
-                "tempo": "節奏跑/Tempo",
-                "long": "長距離/Long Run",
-                "race": "比賽/競速"
-            }
-            cat = type_map.get(row['type'], "輕鬆跑/Easy Run")
-            rec = SHOES.get(cat, [])[:2]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Body Battery", body_battery, "能量狀態")
+    col2.metric("睡眠分數", sleep_score)
+    col3.metric("HRV", f"{hrv} ms")
+    col4.metric("RHR", f"{rhr} bpm")
+    
+    # 恢復建議
+    st.markdown("#### 💡 恢復建議")
+    
+    if body_battery < 50:
+        st.warning("⚠️ Body Battery 過低，今天建議休息或只做輕鬆恢復跑")
+    elif hrv < 30:
+        st.warning("⚠️ HRV 偏低，神經系統疲勞，建議減少強度")
+    elif sleep_score < 60:
+        st.info("💤 睡眠不足，今天訓練強度降低")
+    else:
+        st.success("✅ 恢復狀態良好，可以執行計畫訓練！")
+    
+    # 訓練課表
+    st.header("🗓️ 訓練課表 (24週)")
+    
+    # 選擇週數
+    week_options = [p["週"] for p in plan]
+    selected_week = st.selectbox("選擇週數", week_options, index=min(weeks_to_race-1, len(week_options)-1) if weeks_to_race > 0 else 0)
+    
+    # 找到選擇的週
+    selected_plan = None
+    for p in plan:
+        if p["週"] == selected_week:
+            selected_plan = p
+            break
+    
+    if selected_plan:
+        st.markdown(f"""
+        **{selected_plan['階段']}** | {selected_plan['主題']}  
+        **本週里程**: {selected_plan['里程']} | **重點**: {selected_plan['重點']}
+        """)
+        
+        # 課表表格
+        schedule_data = []
+        for row in selected_plan["課表"]:
+            # 找鞋款建議
+            type_map = {"E": "輕鬆跑/Easy Run", "M": "長距離/Long Run", 
+                       "T": "節奏跑/Tempo", "I": "間歇跑/Interval", 
+                       "R": "恢復跑/Recovery", "RACE": "比賽/競速"}
+            cat = type_map.get(row["type"], "輕鬆跑/Easy Run")
+            rec_shoes = SHOES.get(cat, [])[:2]
             
             # 檢查用戶是否有
-            owned = []
-            for s in my_shoes:
-                for r in rec:
-                    if r in s or s in r:
-                        owned.append(r)
+            owned = [s for s in my_shoes if any(r in s for r in rec_shoes)]
             
-            if owned:
-                shoe_recs.append(f"✅ {', '.join(owned)}")
-            else:
-                shoe_recs.append(f"➕ {', '.join(rec[:2])}")
+            schedule_data.append({
+                "day": row["day"],
+                "type": row["type"],
+                "title": row["title"],
+                "pace": row["pace"],
+                "shoes": ", ".join(owned) if owned else f"➕ {rec_shoes[0]}" if rec_shoes else "-"
+            })
+        
+        schedule_df = pd.DataFrame(schedule_data)
+        st.dataframe(schedule_df, use_container_width=True, hide_index=True)
+        
+        # 配速說明
+        with st.expander("📖 本週訓練配速說明"):
+            for row in selected_plan["課表"]:
+                if row["type"] != "RACE":
+                    st.markdown(f"**{row['day']} {row['title']}**: {row['pace']}")
     
-    df["建議鞋款"] = shoe_recs
+    # 鞋款建議
+    st.header("👟 鞋款建議")
     
-    # 顯示表格
-    st.dataframe(
-        df[["day", "title", "pace", "note", "建議鞋款"]],
-        use_container_width=True,
-        hide_index=True
-    )
+    if my_shoes:
+        st.success(f"✅ 你已有 {len(my_shoes)} 雙鞋: {', '.join(my_shoes[:5])}")
+    else:
+        st.info("請在側邊欄選擇你現有的鞋款")
     
-    # 桌布下載
-    st.markdown("---")
-    st.header("📱 手機桌布下載")
+    tab1, tab2, tab3 = st.tabs(["輕鬆跑", "間歇/節奏", "長距離/比賽"])
     
-    # 生成文字內容
-    race_date_str = rd.strftime("%Y-%m-%d")
-    wall_text = f"""🏃 Kevin的馬拉松訓練
-📅 目標: {race_date_str}
-🎯 目標: 全馬 {tm} / 半馬 {th}
-📆 訓練期: {phase}
+    with tab1:
+        st.dataframe(pd.DataFrame(SHOES["輕鬆跑/Easy Run"][:10], columns=["鞋款"]), hide_index=True)
+    with tab2:
+        st.dataframe(pd.DataFrame(SHOES["間歇跑/Interval"][:10], columns=["鞋款"]), hide_index=True)
+    with tab3:
+        st.dataframe(pd.DataFrame(SHOES["長距離/Long Run"][:10], columns=["鞋款"]), hide_index=True)
+    
+    # 下載功能
+    st.header("📱 下載課表")
+    
+    if st.button("📥 生成下載"):
+        race_date_str = race_date.strftime("%Y-%m-%d")
+        
+        download_text = f"""🏃 Kevin的馬拉松訓練
+目標: {target_marathon} (全馬) / {target_half} (半馬)
+VDOT: {vdot} | VO2max: {vo2max}
+比賽日期: {race_date_str}
+備戰: {days_to_race}天
 
 ═══════════════════════
-📅  本週訓練課表
+📊 體能數據
 ═══════════════════════
-"""
-    for row in pdata["schedule"]:
-        wall_text += f"""
-{row['day']} {row['title']}
-⏱️ 配速: {row['pace']}
-📝 {row['note']}
-"""
-    
-    wall_text += f"""
-═══════════════════════
-🏃 加油！訓練愉快！
-═══════════════════════
-"""
-    
-    # 直接顯示下載按鈕
-    st.download_button(
-        label="📥 下載課表到電腦/手機",
-        data=wall_text,
-        file_name=f"marathon_schedule_{race_date_str}.txt",
-        mime_type="text/plain"
-    )
-    
-    st.info("💡 下載後可存到手機備忘錄，设為手機桌布！")
+VDOT: {vdot}
+VO2max: {vo2max}
+RHR: {rhr} bpm
+HRV: {hrv} ms
+Body Battery: {body_battery}
+睡眠分數: {sleep_score}
 
+═══════════════════════
+⏱️ 配速區間 (VDOT {vdot})
+═══════════════════════
+E區間: {pace['E']}
+M區間: {pace['M']}
+T區間: {pace['T']}
+I區間: {pace['I']}
+R區間: {pace['R']}
+
+═══════════════════════
+📅 訓練課表
+═══════════════════════
+"""
+        
+        for p in plan:
+            download_text += f"\n{p['週']} - {p['階段']}\n"
+            download_text += f"里程: {p['里程']} | 重點: {p['重點']}\n"
+            for row in p["課表"]:
+                download_text += f"  {row['day']}: {row['title']} @ {row['pace']}\n"
+        
+        st.download_button(
+            label="📥 下載完整訓練計畫",
+            data=download_text,
+            file_name=f"marathon_plan_{race_date_str}.txt",
+            mime_type="text/plain"
+        )
+    
     st.markdown("---")
-    st.caption("🏃 馬拉松教訓系統 | 訓練愉快！")
+    st.caption("🏃 馬拉松教練系統 | 科學化訓練，快樂跑步！")
 
 if __name__ == "__main__":
     main()
